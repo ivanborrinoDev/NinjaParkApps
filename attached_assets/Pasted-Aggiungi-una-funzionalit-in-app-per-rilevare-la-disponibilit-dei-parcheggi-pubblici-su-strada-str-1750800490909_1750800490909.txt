@@ -1,0 +1,77 @@
+Aggiungi una funzionalità in-app per rilevare la disponibilità dei parcheggi pubblici su strada (strisce blu e bianche) tramite segnalazioni dagli utenti:
+
+1. L’utente può cliccare “Sto andando via” per indicare che sta liberando un parcheggio.
+2. L’app registra automaticamente:
+   - la posizione GPS esatta del parcheggio
+   - l’orario della segnalazione
+   - il tipo di parcheggio (blu o bianco)
+   - l’ID dell’utente che segnala
+3. La mappa mostra un marker VERDE sul punto, visibile a tutti, per i successivi 10 minuti.
+4. Dopo 10 minuti, il marker diventa GRIGIO per indicare disponibilità incerta.
+5. Un altro utente può cliccare “Ho preso questo posto” per confermare la segnalazione.
+6. Il sistema aggiorna il punteggio di affidabilità dell’utente che ha fatto la segnalazione.
+7. Implementa un sistema gamificato con badge/medaglie per gli utenti affidabili che segnalano spesso parcheggi reali.
+8. Usa Firestore per gestire:
+   - posizione e timestamp dei parcheggi segnalati
+   - stato attuale del parcheggio (disponibile / incerto / occupato)
+   - ID segnalatore
+   - numero di conferme da altri utenti
+9. Invia una notifica push agli utenti nelle vicinanze quando un parcheggio viene liberato entro 200m dalla loro posizione attuale.
+
+L’obiettivo è creare una rete crowdsourced che migliori l’accuratezza delle segnalazioni nel tempo, incentivando gli utenti affidabili.
+
+———
+
+Prompt 7 — Rilevamento automatico parcheggio tramite sensori smartphone
+
+# Project: ParkNinja - MVP feature: automatic parking detection using smartphone sensors
+
+## Goal
+Implement client-side and backend logic to automatically detect when a user parks or leaves a parking spot on street parking (strisce blu/bianche), leveraging smartphone sensors and APIs, minimizing manual user input.
+
+## Client-side (Flutter + native modules)
+- Integrate Activity Recognition API on Android and Core Motion on iOS to detect user activity transitions.
+- Use accelerometer, gyroscope, and GPS data to detect:
+  - Deceleration event when driving slows down sharply.
+  - Transition from "in vehicle" moving to "stationary" for more than 90 seconds.
+  - Transition from "stationary" to "walking" indicating user has left the car.
+- Use Bluetooth disconnection from car (if available) as a signal to confirm parking event.
+- Compute a confidence score (0-100) for each detected event indicating likelihood of parking or leaving.
+- Upon confidence >75, send a local notification: "Hai appena parcheggiato qui? Confermi la posizione?"
+- On user confirmation, save parking event with GPS coords, timestamp, type of parking (blu/bianca), confidence score.
+- On detection of leaving event with high confidence, mark spot as free.
+- If user does not confirm, mark as potential spot with lower visibility to other users.
+
+## Backend (Firebase Firestore)
+- Store parking events with fields:
+  - location: lat/lng
+  - timestamp: ISO8601
+  - status: "occupied" or "free"
+  - confidence: int 0-100
+  - userConfirmed: bool
+  - type: "blu" or "bianca" or null
+  - source: "sensor"
+- Implement logic to remove "phantom" parking spots not reconfirmed within 15 minutes.
+- Aggregate crowdsourced confirmations to improve accuracy.
+- Provide real-time updates to frontend to reflect parking availability.
+
+## UX Notes
+- Show unconfirmed spots with a distinct style (lighter color or icon).
+- Allow manual override for users to mark spots as free or occupied.
+- Notifications should be minimal and only appear on strong confidence.
+
+## Deliverables
+- Flutter code integrating sensors and notification workflow.
+- Backend Firestore schema and cloud function triggers for status update.
+- API endpoints or real-time listeners for frontend update.
+- Confidence algorithm pseudocode.
+- Documentation comments for maintainability.
+
+## Constraints
+- Keep sensor data usage minimal to save battery.
+- Minimize false positives and respect user privacy.
+- Avoid overwhelming the user with notifications.
+
+---
+
+Please generate a detailed, step-by-step development plan and code structure focused on this feature for MVP. Include potential edge cases and fallback mechanisms.
