@@ -1,260 +1,128 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { ParkingPrivate } from '../types/parking';
-import { BookingFormData, Booking } from '../types/booking';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
-import { X, Calendar, Clock, Euro, CreditCard } from 'lucide-react';
+import React, { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useApp } from "@/contexts/AppContext";
+import { useToast } from "@/hooks/use-toast";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  parking: ParkingPrivate | null;
-  onBookingSuccess: (booking: Booking) => void;
-  existingBookings: Booking[];
+  parkingSpot: any;
 }
 
-export const BookingModal: React.FC<BookingModalProps> = ({
-  isOpen,
-  onClose,
-  parking,
-  onBookingSuccess,
-  existingBookings,
-}) => {
-  const { currentUser } = useAuth();
+export function BookingModal({ isOpen, onClose, parkingSpot }: BookingModalProps) {
+  const { user } = useAuth();
   const { toast } = useToast();
-
-  const [formData, setFormData] = useState<BookingFormData>({
-    startDate: '',
-    startTime: '',
-    endDate: '',
-    endTime: '',
+  
+  const [loading, setLoading] = useState(false);
+  const [bookingData, setBookingData] = useState({
+    startDate: "",
+    startTime: "09:00",
+    endDate: "",
+    endTime: "17:00",
+    bookingType: "hourly" as "hourly" | "weekly",
   });
 
-  const [totalCost, setTotalCost] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [loading, setLoading] = useState(false);
+  if (!isOpen || !parkingSpot) return null;
 
-  // Initialize form with current date/time
-  useEffect(() => {
-    if (isOpen && parking) {
-      const now = new Date();
-      const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
-      
-      const formatDate = (date: Date) => date.toISOString().split('T')[0];
-      const formatTime = (date: Date) => date.toTimeString().slice(0, 5);
-
-      setFormData({
-        startDate: formatDate(now),
-        startTime: formatTime(now),
-        endDate: formatDate(oneHourLater),
-        endTime: formatTime(oneHourLater),
-      });
-    }
-  }, [isOpen, parking]);
-
-  // Calculate cost when form data changes
-  useEffect(() => {
-    if (!parking || !formData.startDate || !formData.startTime || !formData.endDate || !formData.endTime) {
-      setTotalCost(0);
-      setDuration(0);
-      return;
+  const calculatePrice = () => {
+    if (!bookingData.startDate || !bookingData.startTime || !bookingData.endDate || !bookingData.endTime) {
+      return 0;
     }
 
-    const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`);
-    const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
-
-    if (endDateTime <= startDateTime) {
-      setTotalCost(0);
-      setDuration(0);
-      return;
-    }
-
-    const durationHours = (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60);
-    const cost = durationHours * parking.prezzo;
-
-    setDuration(durationHours);
-    setTotalCost(cost);
-  }, [formData, parking]);
-
-  const handleInputChange = (field: keyof BookingFormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const checkAvailability = (startDateTime: Date, endDateTime: Date) => {
-    if (!parking) return false;
-
-    // Check existing bookings for this parking spot
-    const conflictingBookings = existingBookings.filter(booking => {
-      if (booking.parkingId !== parking.id || booking.status === 'cancelled') {
-        return false;
-      }
-
-      const bookingStart = new Date(booking.startDateTime);
-      const bookingEnd = new Date(booking.endDateTime);
-
-      // Check for any overlap
-      return (
-        (startDateTime >= bookingStart && startDateTime < bookingEnd) ||
-        (endDateTime > bookingStart && endDateTime <= bookingEnd) ||
-        (startDateTime <= bookingStart && endDateTime >= bookingEnd)
-      );
-    });
-
-    return conflictingBookings.length === 0;
-  };
-
-  const isWithinOperatingHours = (startDateTime: Date, endDateTime: Date) => {
-    if (!parking) return false;
-
-    // For demo purposes, we'll do basic validation
-    // In a real app, you'd parse the orariDisponibilita string properly
-    const orari = parking.orariDisponibilita.toLowerCase();
+    const startDateTime = new Date(`${bookingData.startDate}T${bookingData.startTime}`);
+    const endDateTime = new Date(`${bookingData.endDate}T${bookingData.endTime}`);
     
-    if (orari.includes('24/7') || orari.includes('24h')) {
-      return true;
+    if (endDateTime <= startDateTime) {
+      return 0;
     }
 
-    // Basic check for common patterns
-    const startHour = startDateTime.getHours();
-    const endHour = endDateTime.getHours();
-
-    // If parking hours contain specific time ranges, validate them
-    if (orari.includes('6:00') || orari.includes('06:00')) {
-      return startHour >= 6 && endHour <= 22;
-    }
-
-    // Default validation - assume reasonable hours
-    return startHour >= 6 && endHour <= 23;
+    const diffInMs = endDateTime.getTime() - startDateTime.getTime();
+    const diffInHours = diffInMs / (1000 * 60 * 60);
+    
+    return Math.round(diffInHours * parseFloat(parkingSpot.pricePerHour) * 100) / 100;
   };
 
-  const validateForm = () => {
-    if (!formData.startDate || !formData.startTime || !formData.endDate || !formData.endTime) {
+  const handleBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!user) {
       toast({
         title: "Errore",
-        description: "Seleziona data e ora di inizio e fine",
+        description: "Devi essere autenticato per prenotare.",
         variant: "destructive",
       });
-      return false;
+      return;
     }
 
-    const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`);
-    const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
-    const now = new Date();
-
-    if (startDateTime < now) {
+    if (!bookingData.startDate || !bookingData.startTime || !bookingData.endDate || !bookingData.endTime) {
       toast({
         title: "Errore",
-        description: "Non puoi prenotare nel passato",
+        description: "Compila tutti i campi della prenotazione.",
         variant: "destructive",
       });
-      return false;
+      return;
     }
 
+    const startDateTime = new Date(`${bookingData.startDate}T${bookingData.startTime}`);
+    const endDateTime = new Date(`${bookingData.endDate}T${bookingData.endTime}`);
+    
     if (endDateTime <= startDateTime) {
       toast({
         title: "Errore",
-        description: "L'ora di fine deve essere successiva a quella di inizio",
+        description: "L'orario di fine deve essere successivo a quello di inizio.",
         variant: "destructive",
       });
-      return false;
+      return;
     }
 
-    if (duration < 0.5) {
+    if (startDateTime < new Date()) {
       toast({
         title: "Errore",
-        description: "La prenotazione minima è di 30 minuti",
+        description: "Non puoi prenotare nel passato.",
         variant: "destructive",
       });
-      return false;
+      return;
     }
 
-    if (duration > 24) {
-      toast({
-        title: "Errore",
-        description: "La prenotazione massima è di 24 ore",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    if (!isWithinOperatingHours(startDateTime, endDateTime)) {
-      toast({
-        title: "Errore",
-        description: "L'orario selezionato non è disponibile per questo parcheggio",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    if (!checkAvailability(startDateTime, endDateTime)) {
-      toast({
-        title: "Parcheggio non disponibile",
-        description: "Il parcheggio è già prenotato in questo orario. Seleziona un orario diverso.",
-        variant: "destructive",
-      });
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleBooking = async () => {
-    if (!validateForm() || !parking || !currentUser) return;
+    const totalPrice = calculatePrice();
 
     setLoading(true);
-
     try {
-      // Create booking object
-      const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`);
-      const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`);
-
-      const booking: Booking = {
-        id: `booking_${Date.now()}`,
-        userId: currentUser.uid,
-        parkingId: parking.id,
-        parkingName: parking.name,
-        startDateTime,
-        endDateTime,
-        totalCost,
-        status: 'pending',
-        createdAt: new Date(),
-      };
-
-      // In a real app, this would create a Stripe payment intent
-      // For demo purposes, we'll simulate a successful payment
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Simulate successful payment
-      const confirmedBooking: Booking = {
-        ...booking,
-        status: 'confirmed',
-        paymentIntentId: `pi_${Date.now()}`,
-      };
-
-      onBookingSuccess(confirmedBooking);
-
-      toast({
-        title: "Prenotazione confermata!",
-        description: `Il tuo parcheggio è stato prenotato per ${duration.toFixed(1)} ore`,
+      const response = await fetch("/api/bookings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          parkingSpotId: parkingSpot.id,
+          guestId: user.id,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
+          totalPrice: totalPrice.toString(),
+          status: "confirmed",
+        }),
       });
 
-      onClose();
-      
-      // Reset form
-      setFormData({
-        startDate: '',
-        startTime: '',
-        endDate: '',
-        endTime: '',
-      });
-
-    } catch (error: any) {
+      if (response.ok) {
+        toast({
+          title: "Prenotazione confermata!",
+          description: `Parcheggio prenotato per €${totalPrice}. Riceverai un'email di conferma.`,
+        });
+        onClose();
+        // Reset form
+        setBookingData({
+          startDate: "",
+          startTime: "09:00",
+          endDate: "",
+          endTime: "17:00",
+        });
+      } else {
+        throw new Error("Errore durante la prenotazione");
+      }
+    } catch (error) {
       toast({
-        title: "Errore nel pagamento",
+        title: "Errore",
         description: "Impossibile completare la prenotazione. Riprova.",
         variant: "destructive",
       });
@@ -263,132 +131,195 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     }
   };
 
-  if (!isOpen || !parking) return null;
+  const totalPrice = calculatePrice();
+  const isValidBooking = totalPrice > 0;
+
+  // Get today's date in YYYY-MM-DD format
+  const today = new Date().toISOString().split('T')[0];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-park-surface border-gray-600 max-h-[90vh] overflow-y-auto">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-          <CardTitle className="text-white text-xl font-semibold">
-            Prenota Parcheggio
-          </CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            className="text-gray-400 hover:text-white"
-            disabled={loading}
-          >
-            <X className="w-5 h-5" />
-          </Button>
-        </CardHeader>
+    <div className="fixed inset-0 z-50">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm" 
+        onClick={onClose}
+      />
+      
+      {/* Modal Content */}
+      <div className="absolute bottom-0 left-0 right-0 bg-ninja-gray rounded-t-3xl shadow-2xl border-t border-gray-600 transform translate-y-0 transition-transform duration-300 max-h-[90vh] overflow-y-auto">
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-2">
+          <div className="w-12 h-1.5 bg-gray-500 rounded-full"></div>
+        </div>
         
-        <CardContent className="space-y-6">
-          {/* Parking Info */}
-          <div className="bg-park-card rounded-lg p-4">
-            <h3 className="text-white font-medium mb-2">{parking.name}</h3>
-            <div className="flex items-center justify-between text-sm text-gray-300">
-              <span className="flex items-center space-x-1">
-                <Euro className="w-4 h-4" />
-                <span>{parking.prezzo.toFixed(2)} €/ora</span>
-              </span>
-              <span>{parking.orariDisponibilita}</span>
-            </div>
+        {/* Parking Image */}
+        <div className="px-6">
+          <div className="rounded-2xl overflow-hidden mb-4">
+            <img 
+              src={parkingSpot.imageUrl || "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&h=400"} 
+              alt={parkingSpot.name}
+              className="w-full h-32 object-cover" 
+            />
+          </div>
+        </div>
+        
+        {/* Content */}
+        <div className="px-6 pb-8">
+          {/* Header */}
+          <div className="mb-6">
+            <h3 className="text-2xl font-bold text-white mb-2">Prenota Parcheggio</h3>
+            <p className="text-gray-400">{parkingSpot.name}</p>
+            <p className="text-ninja-mint font-semibold">€{parkingSpot.pricePerHour}/ora</p>
           </div>
 
-          {/* Date and Time Selection */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-white flex items-center space-x-2">
-                  <Calendar className="w-4 h-4 text-park-mint" />
-                  <span>Data Inizio</span>
-                </Label>
-                <Input
+          <form onSubmit={handleBooking} className="space-y-6">
+            {/* Booking Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Tipo di Prenotazione
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBookingData(prev => ({ ...prev, bookingType: "hourly" }))}
+                  className={`px-4 py-3 rounded-xl font-medium transition-colors ${
+                    bookingData.bookingType === "hourly"
+                      ? "bg-ninja-mint text-white"
+                      : "bg-ninja-gray-light text-gray-300 hover:bg-gray-600"
+                  }`}
+                >
+                  Oraria
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBookingData(prev => ({ ...prev, bookingType: "weekly" }))}
+                  className={`px-4 py-3 rounded-xl font-medium transition-colors ${
+                    bookingData.bookingType === "weekly"
+                      ? "bg-ninja-mint text-white"
+                      : "bg-ninja-gray-light text-gray-300 hover:bg-gray-600"
+                  }`}
+                >
+                  Settimanale
+                </button>
+              </div>
+            </div>
+
+            {/* Data e Ora Inizio */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Data Inizio
+                </label>
+                <input
                   type="date"
-                  value={formData.startDate}
-                  onChange={(e) => handleInputChange('startDate', e.target.value)}
-                  className="bg-park-card border-gray-600 text-white"
-                  min={new Date().toISOString().split('T')[0]}
+                  min={today}
+                  value={bookingData.startDate}
+                  onChange={(e) => setBookingData(prev => ({ ...prev, startDate: e.target.value }))}
+                  className="w-full px-4 py-3 bg-ninja-gray-light border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-ninja-mint"
+                  required
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-white flex items-center space-x-2">
-                  <Clock className="w-4 h-4 text-park-mint" />
-                  <span>Ora Inizio</span>
-                </Label>
-                <Input
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Ora Inizio
+                </label>
+                <input
                   type="time"
-                  value={formData.startTime}
-                  onChange={(e) => handleInputChange('startTime', e.target.value)}
-                  className="bg-park-card border-gray-600 text-white"
+                  value={bookingData.startTime}
+                  onChange={(e) => setBookingData(prev => ({ ...prev, startTime: e.target.value }))}
+                  className="w-full px-4 py-3 bg-ninja-gray-light border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-ninja-mint"
+                  required
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-white">Data Fine</Label>
-                <Input
+            {/* Data e Ora Fine */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Data Fine
+                </label>
+                <input
                   type="date"
-                  value={formData.endDate}
-                  onChange={(e) => handleInputChange('endDate', e.target.value)}
-                  className="bg-park-card border-gray-600 text-white"
-                  min={formData.startDate || new Date().toISOString().split('T')[0]}
+                  min={bookingData.startDate || today}
+                  value={bookingData.endDate}
+                  onChange={(e) => setBookingData(prev => ({ ...prev, endDate: e.target.value }))}
+                  className="w-full px-4 py-3 bg-ninja-gray-light border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-ninja-mint"
+                  required
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-white">Ora Fine</Label>
-                <Input
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Ora Fine
+                </label>
+                <input
                   type="time"
-                  value={formData.endTime}
-                  onChange={(e) => handleInputChange('endTime', e.target.value)}
-                  className="bg-park-card border-gray-600 text-white"
+                  value={bookingData.endTime}
+                  onChange={(e) => setBookingData(prev => ({ ...prev, endTime: e.target.value }))}
+                  className="w-full px-4 py-3 bg-ninja-gray-light border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-ninja-mint"
+                  required
                 />
               </div>
             </div>
-          </div>
 
-          {/* Cost Summary */}
-          {totalCost > 0 && (
-            <div className="bg-park-card rounded-lg p-4 border border-park-mint">
-              <div className="flex items-center justify-between text-white mb-2">
-                <span>Durata:</span>
-                <span className="font-medium">{duration.toFixed(1)} ore</span>
-              </div>
-              <div className="flex items-center justify-between text-white mb-2">
-                <span>Tariffa oraria:</span>
-                <span className="font-medium">{parking.prezzo.toFixed(2)} €</span>
-              </div>
-              <hr className="border-gray-600 my-2" />
-              <div className="flex items-center justify-between text-park-mint text-lg font-bold">
-                <span>Totale:</span>
-                <span>{totalCost.toFixed(2)} €</span>
+            {/* Riepilogo Prezzo */}
+            <div className="bg-ninja-gray-light rounded-2xl p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm">Costo totale</p>
+                  <p className="text-3xl font-bold text-ninja-mint">
+                    {isValidBooking ? `€${totalPrice.toFixed(2)}` : "€0.00"}
+                  </p>
+                </div>
+                <div className="text-right">
+                  {isValidBooking && (
+                    <div className="text-sm text-gray-400">
+                      <p>{Math.round(calculatePrice() / parseFloat(parkingSpot.pricePerHour) * 100) / 100} ore</p>
+                      <p>€{parkingSpot.pricePerHour}/ora</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          )}
 
-          {/* Action Buttons */}
-          <div className="flex space-x-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="flex-1 bg-park-card text-white border-gray-600 hover:bg-gray-600"
-              disabled={loading}
-            >
-              Annulla
-            </Button>
-            <Button
-              onClick={handleBooking}
-              className="flex-1 bg-park-mint text-park-dark hover:bg-opacity-90 flex items-center justify-center space-x-2"
-              disabled={loading || totalCost <= 0}
-            >
-              <CreditCard className="w-4 h-4" />
-              <span>{loading ? 'Elaborazione...' : `Paga ${totalCost.toFixed(2)} €`}</span>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            {/* Disponibilità */}
+            {parkingSpot.availabilityDays && (
+              <div className="bg-ninja-gray-light rounded-2xl p-4">
+                <h4 className="text-white font-medium mb-2">Orari di disponibilità</h4>
+                <div className="text-sm text-gray-400">
+                  <p>Giorni: {parkingSpot.availabilityDays?.join(", ") || "Non specificati"}</p>
+                  <p>Orario: {parkingSpot.availabilityStartTime || "00:00"} - {parkingSpot.availabilityEndTime || "23:59"}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="py-4 px-6 bg-ninja-gray-light text-white font-semibold rounded-xl hover:bg-gray-600 transition-colors"
+              >
+                Annulla
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !isValidBooking}
+                className="py-4 px-6 bg-ninja-mint hover:bg-ninja-mint-dark text-white font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {loading ? (
+                  <LoadingSpinner size="sm" className="mr-2" />
+                ) : (
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                )}
+                {loading ? "Prenotando..." : "Paga e Prenota"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   );
-};
+}

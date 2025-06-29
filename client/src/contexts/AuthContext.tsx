@@ -1,99 +1,45 @@
-import React, { createContext, useContext, useState } from 'react';
-
-interface User {
-  uid: string;
-  email: string;
-  displayName?: string;
-}
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { User as FirebaseUser, onAuthStateChanged } from "firebase/auth";
+import { auth, handleRedirectResult } from "@/lib/firebase";
+import type { User } from "@shared/schema";
 
 interface AuthContextType {
-  currentUser: User | null;
+  firebaseUser: FirebaseUser | null;
+  user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name?: string) => Promise<void>;
-  signOut: () => void;
+  setUser: (user: User | null) => void;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  currentUser: null,
-  loading: false,
-  signIn: async () => {},
-  signUp: async () => {},
-  signOut: () => {},
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => {
-  return useContext(AuthContext);
-};
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-interface AuthProviderProps {
-  children: React.ReactNode;
-}
+  useEffect(() => {
+    // Bypass Firebase authentication - simulate a logged in user
+    const mockFirebaseUser = {
+      uid: "demo-user-123",
+      email: "demo@ninjapark.com",
+      displayName: "Demo User"
+    } as FirebaseUser;
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const signIn = async (email: string, password: string) => {
-    setLoading(true);
-    try {
-      // Simulate authentication
-      const user: User = {
-        uid: `user_${Date.now()}`,
-        email,
-        displayName: email.split('@')[0],
-      };
-      setCurrentUser(user);
-      localStorage.setItem('ninjapark_user', JSON.stringify(user));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const signUp = async (email: string, password: string, name?: string) => {
-    setLoading(true);
-    try {
-      // Simulate registration
-      const user: User = {
-        uid: `user_${Date.now()}`,
-        email,
-        displayName: name || email.split('@')[0],
-      };
-      setCurrentUser(user);
-      localStorage.setItem('ninjapark_user', JSON.stringify(user));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const signOut = () => {
-    setCurrentUser(null);
-    localStorage.removeItem('ninjapark_user');
-  };
-
-  // Check for stored user on mount
-  React.useEffect(() => {
-    const storedUser = localStorage.getItem('ninjapark_user');
-    if (storedUser) {
-      try {
-        setCurrentUser(JSON.parse(storedUser));
-      } catch (error) {
-        localStorage.removeItem('ninjapark_user');
-      }
-    }
+    setFirebaseUser(mockFirebaseUser);
+    setLoading(false);
   }, []);
 
-  const value: AuthContextType = {
-    currentUser,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-  };
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ firebaseUser, user, loading, setUser }}>
       {children}
     </AuthContext.Provider>
   );
-};
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+}

@@ -1,20 +1,35 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>NinjaPark - Smart Urban Parking</title>
-    <meta name="description" content="Discover and book parking spots effortlessly with NinjaPark. Smart urban parking solutions with real-time availability and secure booking." />
+    <title>NinjaPark - Smart Parking Solutions</title>
+    <meta name="description" content="Find and book parking spots instantly with NinjaPark. Smart parking solutions for urban warriors with secure booking and real-time availability." />
     
-    <!-- Open Graph tags -->
-    <meta property="og:title" content="NinjaPark - Smart Urban Parking" />
-    <meta property="og:description" content="Discover and book parking spots effortlessly with NinjaPark. Smart urban parking solutions with real-time availability and secure booking." />
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="NinjaPark - Smart Parking Solutions" />
+    <meta property="og:description" content="Find and book parking spots instantly with NinjaPark. Smart parking solutions for urban warriors." />
     <meta property="og:type" content="website" />
+    <meta property="og:image" content="/ninja-park-og.jpg" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#10B981" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icon-192x192.png" />
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/parking-icon.svg" />
+    
+    <style>
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+    </style>
   </head>
   <body class="dark">
     <div id="root"></div>
